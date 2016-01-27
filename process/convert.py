@@ -40,11 +40,54 @@ HEADER = [
 def main(argv):
     csv_rows = open_csv_file(argv[1])
 
-    filtered_rows = filter_rows(csv_rows)
+    amendments = load_amendment_files(argv[2:])
+
+    amended_rows = apply_amendments(csv_rows, amendments)
+
+    filtered_rows = filter_rows(amended_rows)
 
     transformed_rows = transform_rows(filtered_rows)
 
     output_json(transformed_rows)
+
+
+def usage():
+    sys.stderr.write('Usage: {} <current.json> <amendment.json..>\n'.format(
+        sys.argv[0]))
+
+
+def apply_amendments(rows, amendments):
+    for row in rows:
+        try:
+            amended_row = amendments.pop(row['organisation_code'])
+            sys.stderr.write('Amend {}: {} -> {}\n'.format(
+                row['organisation_code'], row, amended_row))
+
+            yield amended_row
+
+        except KeyError:  # no amended row for this practice
+            yield row
+
+    sys.stderr.write('{} NEW practices: {}'.format(
+        len(amendments.keys()),
+        ', '.join(amendments.keys())))
+
+    for row in amendments.values():
+        yield row
+
+
+def write_output(rows):
+    json.dump(list(rows), sys.stdout, indent=4)
+
+
+def load_amendment_files(csv_filenames):
+    amendments = {}
+
+    for filename in csv_filenames:
+        for row in open_csv_file(filename):
+            amendments[row['organisation_code']] = row
+
+    return amendments
 
 
 def open_csv_file(filename):
@@ -86,7 +129,10 @@ def transform_rows(rows):
 
 
 def output_json(rows):
-    json.dump(list(rows), sys.stdout, indent=4)
+    json.dump(
+        sorted(list(rows), key=lambda row: row['organisation_code']),
+        sys.stdout,
+        indent=4)
 
 
 if __name__ == '__main__':
